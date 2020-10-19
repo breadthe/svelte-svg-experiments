@@ -1,5 +1,5 @@
 <script>
-  import { uuid } from "./utils";
+  import { uuid, pixelToViewport } from "./utils";
   import ColorPicker from "./components/inputs/ColorPicker.svelte";
   import Dropdown from "./components/inputs/Dropdown.svelte";
   import Checkbox from "./components/inputs/Checkbox.svelte";
@@ -17,7 +17,13 @@
     fillRule: "nonzero", // nonzero, evenodd
     // originX: 0,
     // originY: 72,
-    points: [{ x: 50, y: 3 }, { x: 21, y: 90 }, { x: 98, y: 35 }]
+    points: [{ x: 50, y: 3 }, { x: 21, y: 90 }, { x: 98, y: 35 }],
+    pickedVertex: { x: null, y: null } // coordinates of a vertex that was "picked", i.e. click-n-hold
+  };
+
+  const mouse = {
+    x: 0,
+    y: 0
   };
 
   let init = () => JSON.parse(JSON.stringify(initial));
@@ -59,7 +65,7 @@
     selected.points = points;
   };
 
-  $: svg = `<svg viewBox="0 0 ${selected.viewboxX},${
+  $: svg = `<svg id="svg" viewBox="0 0 ${selected.viewboxX},${
     selected.viewboxY
   }" xmlns="http://www.w3.org/2000/svg">
   <polygon
@@ -71,6 +77,61 @@
     stroke-linejoin="${selected.strokeLinejoin}"
     points="${points()}" />
 </svg>`;
+
+  // Track the mouse coordinates relative to the viewport
+  function trackMouse(event) {
+    [mouse.x, mouse.y] = pixelToViewport(
+      event.offsetX,
+      event.offsetY,
+      document.getElementById("svg"),
+      initial.viewboxX,
+      initial.viewboxY
+    );
+  }
+
+  function pickVertex(event) {
+    // Viewport position of the "picked" vertex = position of mouse when button is clicked
+    const [x, y] = pixelToViewport(
+      event.offsetX,
+      event.offsetY,
+      document.getElementById("svg"),
+      initial.viewboxX,
+      initial.viewboxY
+    );
+
+    // Do the coordinates at the mouse position match any of the polygon's vertices?
+    const ix = selected.points.findIndex(p => p.x === x && p.y === y);
+    if (ix > -1) {
+      [selected.pickedVertex.x, selected.pickedVertex.y] = [x, y];
+    }
+  }
+
+  function dropVertex(event) {
+    // Exit early if no vertex was picked in the first place
+    if (!selected.pickedVertex) return;
+
+    // Viewport Position of the "dropped" vertex = position of mouse when button is released
+    const [x, y] = pixelToViewport(
+      event.offsetX,
+      event.offsetY,
+      document.getElementById("svg"),
+      initial.viewboxX,
+      initial.viewboxY
+    );
+
+    // Find the initial coordinates of the picked vertex...
+    const ix = selected.points.findIndex(
+      p => p.x === selected.pickedVertex.x && p.y === selected.pickedVertex.y
+    );
+
+    if (ix > -1) {
+      // ...and update them with the dropped coordinates
+      [selected.points[ix].x, selected.points[ix].y] = [x, y];
+
+      // reset the picked vertex
+      selected.pickedVertex = initial.pickedVertex;
+    }
+  }
 </script>
 
 <style lang="scss">
@@ -85,18 +146,17 @@
 
     <div class="flex justify-between items-center">
       <h2>Stroke + Fill</h2>
-      <button type="button" on:click={reset()}>reset</button>
+      <button type="button" class="btn--indigo" on:click={reset()}>
+        reset
+      </button>
     </div>
 
     <div class="space-y-2">
-      <!-- <div class="flex justify-between"> -->
-      <!-- <em class="text-xs text-left">Stroke Width</em> -->
       <Slider
         label="Stroke Width"
         min="0"
         max="10"
         bind:value={selected.strokeWidth} />
-      <!-- </div> -->
 
       <Dropdown
         label="Stroke Linecap"
@@ -129,16 +189,31 @@
   <section class="bg-white shadow p-2 space-y-2">
     <div class="flex justify-between items-center">
       <h2>Points</h2>
-      <button type="button" on:click={addPoint()}>add point</button>
+      <button type="button" class="btn--indigo" on:click={addPoint()}>
+        add point
+      </button>
     </div>
 
     {#each selected.points as point, i}
       <div class="flex flex-col">
-        <em class="text-xs text-left">
-          point {i + 1} (x,y)
+        <em class="flex items-center space-x-2 text-xs text-left">
+          <span>point {i + 1} (x,y)</span>
+
           {#if typeof selected.points[i].id !== 'undefined'}
-            <button type="button" on:click={removePoint(selected.points[i].id)}>
-              -
+            <button
+              type="button"
+              class="text-red-600"
+              on:click={removePoint(selected.points[i].id)}>
+              <svg
+                viewBox="0 0 15 15"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                width="15"
+                height="15">
+                <path
+                  d="M4 7.5h7m-3.5 7a7 7 0 110-14 7 7 0 010 14z"
+                  stroke="currentColor" />
+              </svg>
             </button>
           {/if}
         </em>
@@ -156,7 +231,13 @@
 
   <!-- Rendered SVG output -->
   <section class="flex flex-col">
-    <div class="flex justify-end">
+    <div class="flex justify-between items-center">
+      <!-- Mouse -->
+      <div class="space-x-2 text-xs font-mono">
+        <span>x: {mouse.x}</span>
+        <span>y: {mouse.y}</span>
+      </div>
+
       <!-- Download -->
       <a
         href="data:image/svg+xml;charset=UTF-8,{svg}"
@@ -177,7 +258,11 @@
       </a>
     </div>
 
-    <div class="bg-white shadow">
+    <div
+      class="bg-white shadow"
+      on:mousemove={trackMouse}
+      on:mousedown={pickVertex}
+      on:mouseup={dropVertex}>
       {@html svg}
     </div>
   </section>

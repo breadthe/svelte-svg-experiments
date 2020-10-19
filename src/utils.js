@@ -21,3 +21,23 @@ export function getRandomInt(min, max) {
     max = Math.floor(max);
     return Math.floor(Math.random() * (max - min) + min); //The maximum is exclusive and the minimum is inclusive
 }
+
+// Gets the width + height of a DOM element
+function getElementSize(element) {
+    return [
+        element.width.baseVal.value,
+        element.height.baseVal.value
+    ];
+}
+
+// translate mouse position pixel coordinates → viewport coordinates
+export function pixelToViewport(pixelX, pixelY, viewportElement, maxViewportX, maxViewportY) {
+    const [viewPortX, viewPortY] = [...getElementSize(viewportElement)];
+
+    // translate the pixel coordinates to the viewport coordinates
+    let x = Math.ceil((pixelX / viewPortX) * maxViewportX);
+    let y = Math.ceil((pixelY / viewPortY) * maxViewportY) - 1; // for some reason y is off by 1
+    if (y < 0) y = 0;
+
+    return [x, y];
+}
