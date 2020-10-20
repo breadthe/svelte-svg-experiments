@@ -26,6 +26,12 @@
     y: 0
   };
 
+  let showVertexHandle = false; // show the handle when hovering the mouse over a vertex
+  const vertex = {
+    cx: 0,
+    cy: 0
+  };
+
   let init = () => JSON.parse(JSON.stringify(initial));
 
   let selected = init();
@@ -65,9 +71,7 @@
     selected.points = points;
   };
 
-  $: svg = `<svg id="svg" viewBox="0 0 ${selected.viewboxX},${
-    selected.viewboxY
-  }" xmlns="http://www.w3.org/2000/svg">
+  $: polygon = `
   <polygon
     fill="${fill()}"
     fill-rule="${selected.fillRule}"
@@ -76,7 +80,30 @@
     stroke-linecap="${selected.strokeLinecap}"
     stroke-linejoin="${selected.strokeLinejoin}"
     points="${points()}" />
-</svg>`;
+  `;
+
+  let vertexDot; // the vertex grab handle dot thingy
+  $: {
+    vertexDot = showVertexHandle
+      ? `
+        <g fill="blue">
+          <circle cx="${vertex.cx}" cy="${vertex.cy}" r="5" fill="cyan" />
+          <circle cx="${vertex.cx}" cy="${vertex.cy}" r="3" fill="hotpink" />
+        </g>
+      `
+      : ``;
+  }
+
+  let svg; // rendered SVG may have the vertex grab handle overlayed
+  let svgMarkup; // the final SVG markup without the vertex grab handle
+  $: {
+    svg = `<svg id="svg" viewBox="0 0 ${selected.viewboxX} ${selected.viewboxY}" xmlns="http://www.w3.org/2000/svg">`;
+    svg += `${polygon}`;
+    svgMarkup = svg;
+    svg += `${vertexDot}`;
+    svg += `</svg>`;
+    svgMarkup += `</svg>`;
+  }
 
   // Track the mouse coordinates relative to the viewport
   function trackMouse(event) {
@@ -87,6 +114,26 @@
       initial.viewboxX,
       initial.viewboxY
     );
+  }
+
+  function showTheVertex(event) {
+    const [x, y] = pixelToViewport(
+      event.offsetX,
+      event.offsetY,
+      document.getElementById("svg"),
+      initial.viewboxX,
+      initial.viewboxY
+    );
+
+    // Do the coordinates at the mouse position match any of the polygon's vertices?
+    const ix = selected.points.findIndex(p => p.x === x && p.y === y);
+    if (ix > -1) {
+      showVertexHandle = true;
+      [vertex.cx, vertex.cy] = [x, y];
+    } else {
+      showVertexHandle = false;
+      [vertex.cx, vertex.cy] = [0, 0];
+    }
   }
 
   function pickVertex(event) {
@@ -187,7 +234,7 @@
 
   <!-- Points -->
   <section class="bg-white shadow p-2 space-y-2">
-    <div class="flex justify-between items-center">
+    <div class="flex items-center space-x-2">
       <h2>Points</h2>
       <button type="button" class="btn--indigo" on:click={addPoint()}>
         add point
@@ -240,7 +287,7 @@
 
       <!-- Download -->
       <a
-        href="data:image/svg+xml;charset=UTF-8,{svg}"
+        href="data:image/svg+xml;base64,{btoa(svgMarkup)}"
         download="polygon.svg"
         class="flex text-white font-mono text-xs px-1 bg-pink-500 border-4
         border-pink-500 hover:border-pink-600 hover:shadow">
@@ -258,19 +305,23 @@
       </a>
     </div>
 
+    <!-- Viewport -->
     <div
       class="bg-white shadow"
       on:mousemove={trackMouse}
+      on:mouseover={showTheVertex}
       on:mousedown={pickVertex}
       on:mouseup={dropVertex}>
+
       {@html svg}
+
     </div>
   </section>
 
   <!-- Generated SVG code -->
   <section class="bg-white shadow">
     <pre class="text-xs text-left overflow-auto shadow-inner p-2 bg-white">
-      {svg}
+      {svgMarkup}
     </pre>
   </section>
 </div>
